@@ -21,3 +21,13 @@ Contains:
 - buzzer - only for opening or closing door.
 Photo : ![20231029_185911](https://github.com/Teo0o0/IntroductionToRobotics/assets/99832898/9fe33021-7d04-4437-a20b-2fa7e6e942e9)
 Video : https://youtu.be/PAQP9rZWVyg?si=_xkBA3vZ4UwzhOFJ
+# Homework 4
+Description : This assignment involves a 7-segment display and a joystick. <br>
+The initial position is: the dp led blinking, and all the others off. As the joystick moves, so should the blinking position.
+With a short press of the joystick, the current led (blinking one) should change its state to the negative of its current one.
+The current led should blink, its state not being important.
+With a long press, everything will reset to the initial position. <br>
+Photo : ![20231106_191928](https://github.com/Teo0o0/IntroductionToRobotics/assets/99832898/47edb403-554a-46aa-896c-635e5eda9d7a)
+<br>Video : https://youtu.be/W-_E8yElPA8?si=Ybbr3GiRePs6Vira
+
+
