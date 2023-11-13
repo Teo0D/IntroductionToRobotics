@@ -1,0 +1,292 @@
+/*
+Description:
+Stopwatch - 000.0 -> 999.9 with laps
+
+Flow:
+0. Start State
+Start with 000.0 and nothing in memory, in pause mode
+  (Only the start/stop button (1) does something)
+1. Count State
+After press button 1 - start time. Two possible operations:
+  ~ button 3 (lap) - put the current time in memory, override if more than four
+  ~ button 1 (start) - pause time
+2. Pause State
+In pause mode:
+  ~ button 1 (start) - start from current time, go back to state 1
+  ~ button 2 (reset) - go to 000.0 with laps in memory
+3. Prepare State
+Have 000.0 on display with laps in memory. One can:
+  ~ button 1 (start) - go to 1 (erase laps)
+  ~ button 3 (lap) - see saved laps
+    /// if there are no saved laps, the flow can't enter state 4
+4. Display State
+Display laps:
+  ~ button 2 (reset) - go to 2 (erase laps)
+  ~ button 3 (lap) - go to next lap
+
+To Do:
+
+Doing:
+- Have a function for each state in flow - not needed - kept only for count
+
+Done:
+- Have a function for each button
+- Define persistance and add data structures for laps
+- Complete Button 3 - memory
+- Get rid of magic numbers
+- Keep pressing button 3 -> Cycle (trigger Button3Pressed in state 4 every 1 sec)
+*/
+
+
+
+// Define connections to the shift register
+const int latchPin = 11; // Connects to STCP (latch pin) on the shift register
+const int clockPin = 10; // Connects to SHCP (clock pin) on the shift register
+const int dataPin = 12; // Connects to DS (data pin) on the shift register
+
+// Connections to the three buttons
+const int nrButtons = 3;
+const int arrayButtonPin[] = {A0, A1, A2};
+byte arrayButtonState[] = {LOW, LOW, LOW};
+
+// Define connections to the digit control pins for a 4-digit display
+const int segD1 = 4;
+const int segD2 = 5;
+const int segD3 = 6;
+const int segD4 = 7;
+
+// Store the digits in an array for easy access
+int displayDigits[] = {segD1, segD2, segD3, segD4};
+const int displayCount = 4; // Number of digits in the display
+// Define the number of unique encodings (0-9, A-F for hexadecimal)
+const int encodingsNumber = 16;
+// Define byte encodings for the hexadecimal characters 0-F
+byte byteEncodings[encodingsNumber] = {
+//A B C D E F G DP
+  B11111100, // 0
+  B01100000, // 1
+  B11011010, // 2
+  B11110010, // 3
+  B01100110, // 4
+  B10110110, // 5
+  B10111110, // 6
+  B11100000, // 7
+  B11111110, // 8
+  B11110110, // 9
+  B11101110, // A
+  B00111110, // b
+  B10011100, // C
+  B01111010, // d
+  B10011110, // E
+  B10001110 // F
+};
+
+
+// Variables for controlling the display update timing
+unsigned long lastIncrement = 0;
+unsigned long delayCount = 99; // Delay between updates (milliseconds)
+unsigned long number = 0; // The number being displayed
+
+byte arrayReading[] = {LOW, LOW, LOW};
+byte arrayLastReading[] = {LOW, LOW, LOW};
+unsigned long long arrayLastDebounceTime[] = {0, 0, 0};
+unsigned long long debounceDelay = 50;
+
+int state = 0; /// in the flow
+
+// Data structure for keeping laps in memory - array of lapsCapacity
+const int lapsCapacity = 4;
+int laps[lapsCapacity];
+int currSave = 0;
+int currViewLap = 0;
+int noOfLaps = 0;
+
+bool canCycle = 0;
+unsigned long long cycleDelay = 2000;
+unsigned long lastCycle = 0;
+
+void setup() {
+  pinMode(latchPin, OUTPUT);
+  pinMode(clockPin, OUTPUT);
+  pinMode(dataPin, OUTPUT);
+  
+  for(int i = 0; i < nrButtons; i++) {
+    pinMode(arrayButtonPin[i], INPUT_PULLUP);
+  }
+
+  for (int i = 0; i < displayCount; i++) {
+    pinMode(displayDigits[i], OUTPUT);
+    digitalWrite(displayDigits[i], LOW);
+  }
+  Serial.begin(9600);
+}
+
+void loop() {
+
+  for(int i = 0; i < nrButtons; i++){
+    //// read button state and test if there is a change using debounce
+    arrayReading[i] = digitalRead(arrayButtonPin[i]);
+    if(arrayReading[i] != arrayLastReading[i]){
+      arrayLastDebounceTime[i] = millis();
+    }
+    
+    if((millis() - arrayLastDebounceTime[i]) > debounceDelay){
+      if(arrayReading[i] != arrayButtonState[i]){
+        //// if yes, update and test if pressed
+        arrayButtonState[i] = arrayReading[i];
+        if(arrayButtonState[i] == LOW){
+          if(i == 0) Button1Pressed();
+          if(i == 1) Button2Pressed();
+          if(i == 2) Button3Pressed();
+          lastCycle = millis();
+        }
+      }
+    }
+    arrayLastReading[i] = arrayReading[i];
+  }
+
+ if((canCycle == 1) && (state == 4) && ((millis() - lastCycle) > cycleDelay) && (arrayReading[2] == LOW)) {
+    Button3Pressed();
+  }
+
+  if(arrayReading[2] == HIGH) canCycle = 0;
+ 
+  Serial.println(canCycle);
+
+  if(state == 1) CountState();
+
+  writeNumber(number);
+
+}
+
+void writeReg(int digit) {
+  digitalWrite(latchPin, LOW);
+  shiftOut(dataPin, clockPin, MSBFIRST, digit);
+  digitalWrite(latchPin, HIGH);
+}
+
+void activateDisplay(int displayNumber) {
+  for (int i = 0; i < displayCount; i++) {
+    digitalWrite(displayDigits[i], HIGH);
+  }
+  digitalWrite(displayDigits[displayNumber], LOW);
+}
+
+void writeNumber(int number) {
+  int currentNumber = number;
+  int displayDigit = 3; 
+  int lastDigit = 0;
+
+  while (displayDigit != -1) {
+    lastDigit = currentNumber % 10;
+    activateDisplay(displayDigit);
+    byte toDisplay = byteEncodings[lastDigit];
+    if(displayDigit == 2) {
+      toDisplay = toDisplay | B00000001;
+    }
+    writeReg(toDisplay);
+    displayDigit--;
+    currentNumber /= 10;
+
+    writeReg(B00000000); // Clear the register to avoid ghosting
+  }
+}
+
+void CountState() {
+  /// increment number every .1 seconds 
+  if (millis() - lastIncrement > delayCount) {
+    number++;
+    number %= 10000; 
+    lastIncrement = millis();
+  }
+}
+
+void Button1Pressed() { /// Start button
+  if(state == 0) {
+    lastIncrement = millis();
+    state = 1;
+    return;
+  }
+  if(state == 1) {
+    state = 2;
+    return;
+  }
+  if(state == 2) {
+    lastIncrement = millis();
+    state = 1;
+    return;
+  }
+  if(state == 3) {
+    lastIncrement = millis();
+    noOfLaps = 0;
+    currSave = 0;
+    state = 1;
+    return;
+  }
+  if(state == 4) {
+    return;
+  }
+}
+
+void Button2Pressed() { // Reset button
+  if(state == 0) {
+    return;
+  }
+  if(state == 1) {
+    return;
+  }
+  if(state == 2) {
+    number = 0;
+    state = 3;
+    return;
+  }
+  if(state == 3) {
+    return;
+  }
+  if(state == 4) {
+    /// delete
+    noOfLaps = 0;
+    currSave = 0;
+    number = 0;
+    state = 0;
+    return;
+  }
+}
+
+void Button3Pressed() { // Lap button
+  if(state == 0) {
+    return;
+  }
+  if(state == 1) {
+    //// save number
+    laps[currSave++] = number;
+    if(currSave >= lapsCapacity) currSave = 0;
+    if(noOfLaps != lapsCapacity) noOfLaps++;
+    return;
+  }
+  if(state == 2) {
+    return;
+  }
+  if(state == 3) {
+    /// put first in number
+    if(noOfLaps != 0) {
+      currViewLap = 0;
+      number = laps[currViewLap++];
+    }
+    else {
+      return;
+    }
+    state = 4;
+    canCycle = 0;
+    return;
+  }
+  if(state == 4) {
+    if(noOfLaps != 0) {
+      currViewLap %= noOfLaps;
+      number = laps[currViewLap++];
+    }
+    canCycle = 1; /// must have pressed a second time after entering the lap viewing state
+    lastCycle = millis();
+    return;
+  }
+}
