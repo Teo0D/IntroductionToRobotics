@@ -30,4 +30,31 @@ With a long press, everything will reset to the initial position. <br>
 Photo : ![20231106_191928](https://github.com/Teo0o0/IntroductionToRobotics/assets/99832898/47edb403-554a-46aa-896c-635e5eda9d7a)
 <br>Video : https://youtu.be/W-_E8yElPA8?si=Ybbr3GiRePs6Vira
 
+# Homework 5
+Description : This assignment involves making a stopwatch with a lap functionality and counts in tenths of a second. <br>
+Flow: <br>
+1. Start State <br>
+Start with 000.0 and nothing in memory, in pause mode <br>
+  (Only the start/stop button (1) does something) <br>
+2. Count State <br>
+After press button 1 - start time. Two possible operations: <br>
+  ~ button 3 (lap) - put the current time in memory, override if more than four <br>
+  ~ button 1 (start) - pause time <br>
+3. Pause State <br>
+In pause mode: <br>
+  ~ button 1 (start) - start from current time, go back to state 2 <br>
+  ~ button 2 (reset) - go to 000.0 with laps in memory <br>
+4. Prepare State <br>
+Have 000.0 on display with laps in memory. One can: <br>
+  ~ button 1 (start) - go to 2 (erase laps) <br>
+  ~ button 3 (lap) - see saved laps <br>
+    /// if there are no saved laps, the flow can't enter state 4 <br>
+5. Display State <br>
+Display laps: <br>
+  ~ button 2 (reset) - go to 3 (erase laps) <br>
+  ~ button 3 (lap) - go to next lap <br>
+
+Photo : ![20231113_175822](https://github.com/Teo0o0/IntroductionToRobotics/assets/99832898/a5ef24b8-6994-4752-a59c-95320a0744ba)
+ <br>
+Video : https://youtu.be/CzF7UykOvJk?si=xxWZAGPaoMvTiWcf
 
