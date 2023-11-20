@@ -58,3 +58,34 @@ Photo : ![20231113_175822](https://github.com/Teo0o0/IntroductionToRobotics/asse
  <br>
 Video : https://youtu.be/CzF7UykOvJk?si=xxWZAGPaoMvTiWcf
 
+# Homework 6
+Description : This assignment consists of developing a Smart Environment Monitor and Logger, using an Ultrasonic Sensor and a LDR. <br>
+The Led is used to warn in case of a threshold being passed.
+Menu Description : 
+Menu: <br>
+  1. Sensor Settings : <br>
+    1.1. Sensor Sampling Interval : 1 - 10 sec (for each / for both)<br>
+    From here, N thresholds  <br>
+    1.2. Ultrasonic Alert Threshold : (min / max value)<br>
+    1.3. LDR Alert Threshold<br>
+    1.4. Back - N + 2<br><br>
+
+  2. Reset Logger Data : Goto default values (individually / for all) <br>
+    2.1. Yes<br>
+    2.2. No<br><br>
+
+  3. System Status :<br>
+    3.1. Current Sensor Reading : print readings at 1.1. set value and have a key for exit<br>
+    3.2. Current Sensor Settings : print sampling rate and threshold values<br>
+    3.3. Display Logger Data : last 10 readings for all sensors<br>
+    3.4. Back<br><br>
+
+  4. RGB Led Control :<br>
+    4.1. Manual Colour Control<br>
+    4.2. Toggle Automatic ON/OFF<br>
+    4.3. Back<br><br>
+  5. Upload Logger data in EEPROM<br>
+    - Done on demand to not compromise life expectancy of the board<br><br>
+Photo : ![20231120_214919](https://github.com/Teo0o0/IntroductionToRobotics/assets/99832898/5c6e39df-cee5-41b7-85a2-d4ecaca76d7e)
+<br>
+Video : https://youtu.be/zD8k7ipKCPA?si=D1q9b2tz1LxEzfFI
