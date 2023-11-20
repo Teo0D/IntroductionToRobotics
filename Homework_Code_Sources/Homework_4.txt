@@ -1,0 +1,220 @@
+/*
+Split into tasks:
+---- Joystick possible moves ----
+- Move joystick left
+- Move joystick right
+- Move joystick up
+- Move joystick down
+- Press button short
+- Press button long
+
+---- Matrix for moves ----
+Curr  UP  DOWN  LEFT  RIGHT
+a     N/A  g     f     b
+b     a    g     f     N/A
+c     g    d     e     dp
+d     g    N/A   e     c
+e     g    d     N/A   c
+f     a    g     N/A   b
+g     a    d     N/A   N/A
+dp    N/A  N/A   c     N/A
+
+---- To do ----
+
+---- Doing ----
+
+---- Done  ----
+- ON / active signal for LED s that are supposed to be light up - 
+      array of states
+- Intermittent light by current led
+- Move current led according to matrix
+- Push button -> LED state changes
+- Push button for longer -> reset everything
+
+*/
+
+
+// Declare all the joystick pins
+const int pinSW = 2; // Digital pin connected to switch output
+const int pinX = A0; // A0 - Analog pin connected to X output
+const int pinY = A1; // A1 - Analog pin connected to Y output
+
+// Declare all the segments pins
+const int pinA = 12;
+const int pinB = 10;
+const int pinC = 9;
+const int pinD = 8;
+const int pinE = 7;
+const int pinF = 6;
+const int pinG = 5;
+const int pinDP = 4;
+
+//// Encode moves
+const int UP = 0;
+const int DOWN = 1;
+const int LEFT = 2;
+const int RIGHT = 3;
+
+const int segSize = 8;
+int index = 0;
+
+const int noOfDigits = 10;
+byte state = HIGH;
+byte dpState = LOW;
+byte swState = LOW;
+byte lastSwState = LOW;
+int xValue = 0;
+int yValue = 0;
+
+int interv[3][2] = {
+  {0, 350}, 
+  {351, 650}, 
+  {651, 1023}
+};
+
+int moveMatrix[segSize][4] = {
+  { pinA, pinG, pinF, pinB } , 
+  { pinA, pinG, pinF, pinB } ,
+  { pinG, pinD, pinE, pinDP } , 
+  { pinG, pinD, pinE, pinC } ,
+  { pinG, pinD, pinE, pinC } ,
+  { pinA, pinG, pinF, pinB } ,
+  { pinA, pinD, pinG, pinG } ,
+  { pinDP, pinDP, pinC, pinDP }
+};
+
+int stateX = 0;
+int prevStateX = 0;
+int stateY = 0;
+int prevStateY = 0;
+
+bool joyMoved = false;
+int digit = 0;
+int minThreshold = 400;
+int maxThreshold = 600;
+
+int segments[segSize] = { 
+  pinA, pinB, pinC, pinD, pinE, pinF, pinG, pinDP
+};
+
+int segmentsEncoding[] = {-1, -1, -1, -1, 7, 6, 5, 4, 3, 2, 1, -1, 0};
+
+byte segState[segSize] = {LOW, LOW, LOW, LOW, LOW, LOW, LOW, LOW};
+//byte segState[segSize] = {!LOW, !LOW, !LOW, !LOW, !LOW, !LOW, !LOW, !LOW};
+
+int currSegment = pinDP;
+int currState = HIGH;
+unsigned long long startBlinkTime = 0;
+const unsigned long long blinkTime = 500;
+
+byte buttonState = LOW;
+byte reading = LOW;
+byte lastReading = LOW;
+unsigned long long lastDebounceTime = 0;
+unsigned long long debounceDelay = 50;
+unsigned long long resetDelay = 1000;
+
+void setup() {
+  pinMode(pinSW, INPUT_PULLUP);
+  for (int i = 0; i < segSize; i++) {
+    pinMode(segments[i], OUTPUT);
+  }
+  Serial.begin(9600);
+}
+
+void loop() {
+  //// Read input from joystick
+  swState = digitalRead(pinSW);
+  xValue = analogRead(pinX);
+  yValue = analogRead(pinY);
+
+  //// Get the state on the x and y axis
+  for(int i = 0; i < 3; i++) {
+    if(xValue >= interv[i][0] && xValue <= interv[i][1]) {
+      stateX = i - 1;
+    }
+    if(yValue >= interv[i][0] && yValue <= interv[i][1]) {
+      stateY = i - 1;
+    }
+  }
+
+  /// if the states get modified, we change the current led on -1 and +1 (different from middle = 0)
+  if(stateX != prevStateX) {
+    prevStateX = stateX;
+    if(stateX == 0);
+    else if(stateX == -1) {
+      currSegment = moveMatrix[segmentsEncoding[currSegment]][DOWN];
+    }
+    else if(stateX == 1) {
+      currSegment = moveMatrix[segmentsEncoding[currSegment]][UP];
+    }
+  }
+
+  if(stateY != prevStateY) {
+    prevStateY = stateY;
+    if(stateY == 0);
+    else if(stateY == -1) {
+      currSegment = moveMatrix[segmentsEncoding[currSegment]][LEFT];
+    }
+    else if(stateY == 1) {
+      currSegment = moveMatrix[segmentsEncoding[currSegment]][RIGHT];
+    }
+  }
+
+  //// check if the button is pressed and if it is a short or long press
+  if(swState != lastReading){
+    lastDebounceTime = millis();
+  }
+    
+  if((millis() - lastDebounceTime) > debounceDelay){
+    if(swState != buttonState){
+      //// if yes, update and test if pressed
+      buttonState = swState;
+      if(buttonState == LOW){
+        Serial.println("buttonPressed");
+        segState[segmentsEncoding[currSegment]] = !segState[segmentsEncoding[currSegment]];
+      }
+    }
+  }
+
+  if((millis() - lastDebounceTime) > resetDelay) {
+    if(swState == LOW){
+        lastDebounceTime = millis();
+        Serial.println("buttonPressedLong");
+        Reset();
+      
+    }
+  }
+  lastReading = swState;
+
+  LightSegments();
+  
+}
+
+void LightSegments() { //// output updated values to each led
+  if((millis() - startBlinkTime) > blinkTime){
+    startBlinkTime = millis();
+    currState = !currState;
+    //Serial.println(currSegment);
+  }
+  for(int i = 0; i < segSize; i++) {
+    if(segments[i] != currSegment)
+      digitalWrite(segments[i], segState[i]);
+  }
+  digitalWrite(currSegment, currState);
+}
+
+void Reset() { //// reset everything to the original state
+  currSegment = pinDP;
+  for(int i = 0; i < segSize; i++) {
+    segState[i] = LOW;
+  }
+  startBlinkTime = millis();
+  currState = HIGH;
+
+}
+
+
+
+
+
