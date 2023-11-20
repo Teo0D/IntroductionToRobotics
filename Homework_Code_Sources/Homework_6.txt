@@ -1,0 +1,492 @@
+#include <EEPROM.h>
+
+//////  Smart Environment Monitor and Logger //////
+
+/*
+
+  Components:
+- Ultrasonic Sensor - Distance
+- Photocell / LDR - Light Intensity
+- RGB Led
+
+Menu:
+  1. Sensor Settings : 
+    1.1. Sensor Sampling Interval : 1 - 10 sec (for each / for both)
+    From here, N thresholds : 
+    1.2. Ultrasonic Alert Threshold : (min / max value)
+    1.3. LDR Alert Threshold
+    1.4. Back - N + 2
+
+  2. Reset Logger Data : Goto default values (individually / for all) 
+    2.1. Yes
+    2.2. No
+
+  3. System Status :
+    3.1. Current Sensor Reading : print readings at 1.1. set value and have a key for exit
+    3.2. Current Sensor Settings : print sampling rate and threshold values
+    3.3. Display Logger Data : last 10 readings for all sensors
+    3.4. Back
+
+  4. RGB Led Control :
+    4.1. Manual Colour Control
+    4.2. Toggle Automatic ON/OFF
+    4.3. Back
+  5. Upload Logger data in EEPROM
+    - Done on demand to not compromise life expectancy of the board
+
+TO DO : 
+  - Statistics Submenu
+
+DOING : 
+
+DONE : 
+  - Assemble
+  - Basic setup
+  - Read and interpret values from sensors
+  - Variable declaration
+  - Menu and Submenus print - with padding depending on depth , with error handling, each in a function
+  - Display values continuously for menuState = -6
+  - RGB led update
+  - Data structure for log
+  - PrintLoggerData function
+  - Put values in EEPROM
+
+*/
+
+/// Ultrasonic
+const int trigPin = 9;
+const int echoPin = 10;
+int distance = 0;
+int durationUltrasonic = 0;
+const int emitLowDuration = 2;
+const int emitHighDuration = 10;
+
+/// LDR
+const int ldrPin = A0;
+int ldrValue;
+
+/// RGB led
+// const int ledPinRed = 3;
+// const int ledPinGreen = 5;
+// const int ledPinBlue = 6;
+const int ledPinRGBArray[] = {3, 5, 6};
+const int defaultNormalValuesRGB[] = {0, 255, 0};
+const int defaultAlertValuesRGB[] = {255, 0, 0};
+int customNormalValuesRGB[] = {0, 255, 0};
+int customAlertValuesRGB[] = {255, 0, 0};
+byte toggleCustom = LOW;
+int incrementColour = 0;
+
+/// Arrays for settings
+const int defaultSamplingIntervalArray[] = {1000, 1000};
+int samplingIntervalArray[] = {1000, 1000};
+const int defaultAlertThresholdArray[] = {10, 300};
+int alertThresholdArray[] = {10, 300};
+const String samplingMessage = "Enter a value between 1 and 10. Else the value is not modified.\nValue for ";
+
+/// Menu
+int menuState = 0;
+int prevMenuState = 0;
+const int numSensors = 2;
+const int menuDecisionArray[5][10] = {
+  {-1, 1, 2, 3, 4, 0, -1, -1, -1, -1}, //0 Main
+  {-1, -2, -4, -5, 0, -1, -1, -1, -1, -1}, //1 Sensor Settings
+  {-1, 0, 0, -1, -1, -1, -1, -1, -1, -1}, //2 ResetLoggerData
+  {-1, -6, 3, 3, 0, -1, -1, -1, -1, -1}, //3 System Status
+  {-1, -7, 4, 0, -1, -1, -1, -1, -1, -1} //4 RGBLed Control
+};
+
+const int returnMenuState[] = {-1, -1, -3, 1, 1, 1, 3, 4};
+/*
+-2 -> sampling interval for ultrasonic
+-3 -> sampling interval for ldr
+-4 -> ultrasonic alert threshold
+-5 -> ldr alert threshold
+-6 -> current sensor readings
+-7 -> manual colour control with incrementColour
+*/
+
+unsigned long long lastDisplayTimeArray[] = {0, 0};
+
+/// Matrix for last 10 read values
+const int numReadings = 10;
+int loggerDataMatrix[2][numReadings] = {
+  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+};
+
+int contorLoggerDataArray[2] = {0, 0};
+
+
+
+void setup() {
+  // put your setup code here, to run once:
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+
+  pinMode(ldrPin, INPUT);
+
+  for(int i = 0; i < 3; i++) {
+    pinMode(ledPinRGBArray[i], OUTPUT);
+  }
+
+  /// Read values from EEPROM and put them in loggerDataMatrix and contor s
+  for(int j = 0; j < 2; j++) {
+    for(int i = 0; i < numReadings; i++) {
+      
+      int x1 = ((int)EEPROM.read((i + (j * 10)) * 2)) << 8;
+      int x2 = (int)EEPROM.read((i + (j * 10)) * 2 + 1);
+      loggerDataMatrix[j][i] = x1 + x2;
+    }
+  }
+
+  for(int i = 0; i < 2; i++) {
+    int x1 = ((int)EEPROM.read((numReadings * 2 + i) * 2)) << 8;
+    int x2 = (int)EEPROM.read((numReadings * 2 + i) * 2 + 1);
+    contorLoggerDataArray[i] = x1 + x2;
+  }
+
+  Serial.begin(9600);
+  DecideMenuDisplay();
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  /// Update values with sensor readings
+  CurrentSensorReadings();
+
+  /// If an input is detected, the program decides what to do and display
+  if(Serial.available()) {
+    int choice = Serial.parseInt();
+    DecisionTree(choice);
+  }
+
+  /// Update RGB Led
+  LedLight();
+}
+
+void UpdateCycleEEPROM() { //// Write values in EEPROM on demand
+  for(int j = 0; j < 2; j++) {
+    for(int i = 0; i < numReadings; i++) {
+      EEPROM.update((i + (j * 10)) * 2, loggerDataMatrix[j][i] >> 8);
+      EEPROM.update((i + (j * 10)) * 2 + 1, loggerDataMatrix[j][i] & 0xFF);
+      // Serial.print(loggerDataMatrix[j][i] >> 8);
+      // Serial.print(" ");
+      // Serial.print(loggerDataMatrix[j][i] & 0xFF);
+      // Serial.print(" ");
+      // int x1 = ((int)EEPROM.read((i + (j * 10)) * 2)) << 8;
+      // int x2 = (int)EEPROM.read((i + (j * 10)) * 2 + 1);
+      // Serial.println(x1 + x2);
+    }
+  }
+  for(int i = 0; i < 2; i++) {
+    EEPROM.update((numReadings * 2 + i) * 2, contorLoggerDataArray[i] >> 8);
+    EEPROM.update((numReadings * 2 + i) * 2 + 1, contorLoggerDataArray[i] & 0xFF);
+  }
+}
+
+void CurrentSensorReadings() { /// takes values from sensors every sampling intervals and puts them in loggerDataMatrix
+  if(millis() - lastDisplayTimeArray[0] > samplingIntervalArray[0]) {
+    GetDistanceFromUltrasonic();
+    lastDisplayTimeArray[0] = millis();
+    loggerDataMatrix[0][contorLoggerDataArray[0]++] = distance;
+    contorLoggerDataArray[0] %= numReadings;
+    if(menuState == -6) {
+      Serial.print("Ultrasonic reading : ");
+      Serial.println(distance);
+    }
+  }
+
+  if(millis() - lastDisplayTimeArray[1] > samplingIntervalArray[1]) {
+    ldrValue = analogRead(ldrPin);
+    lastDisplayTimeArray[1] = millis();
+    loggerDataMatrix[1][contorLoggerDataArray[1]++] = ldrValue;
+    contorLoggerDataArray[1] %= numReadings;
+    if(menuState == -6) {
+      Serial.print("LDR reading : ");
+      Serial.println(ldrValue);
+    }
+  }
+}
+
+void LedLight() { /// test to see if the thresholds are met and update led colours
+  if(distance <= alertThresholdArray[0] || ldrValue <= alertThresholdArray[1]) {
+    if(toggleCustom == LOW) {
+      for(int i = 0; i < 3; i ++)
+        analogWrite(ledPinRGBArray[i], defaultAlertValuesRGB[i]);
+    }
+    else {
+      for(int i = 0; i < 3; i ++)
+        analogWrite(ledPinRGBArray[i], customAlertValuesRGB[i]);
+    }
+  }
+
+  else {
+    if(toggleCustom == LOW) {
+      for(int i = 0; i < 3; i ++)
+        analogWrite(ledPinRGBArray[i], defaultNormalValuesRGB[i]);
+    }
+    else {
+      for(int i = 0; i < 3; i ++)
+        analogWrite(ledPinRGBArray[i], customNormalValuesRGB[i]);
+    }
+  }
+}
+
+void DecisionTree(int choice) { //// the decisions that are made to display menu
+  if(menuState == 4 && choice == 2) toggleCustom = !toggleCustom; 
+  if(menuState == 2 && choice == 1) Reset();
+  if(menuState == 3 && choice == 2) PrintCurrentSettings();
+  if(menuState == 3 && choice == 3) PrintLoggerData();
+  if(menuState == 0 && choice == 5) UpdateCycleEEPROM();
+  if(menuState >= 0 && menuState <= 4) {
+    if(choice > 9) {PrintErrorMessage(); Serial.println(choice);}
+    else {
+      menuState = menuDecisionArray[menuState][choice];
+      if(menuState == -1) {
+        PrintErrorMessage();
+        menuState = prevMenuState;
+      }
+      
+    }
+  }
+  else if(menuState == -6) {
+    if(choice == 1) menuState = returnMenuState[6];
+  }
+  else if(menuState == -7) {
+    int toDisplay = 0;
+    if(choice < 0 || choice > 255) {
+      if(incrementColour <= 3) choice = customNormalValuesRGB[incrementColour];
+      else choice = customAlertValuesRGB[incrementColour - 3];
+    }
+    else {
+      if(incrementColour <= 3) customNormalValuesRGB[incrementColour] = choice;
+      else customAlertValuesRGB[incrementColour - 3] = choice;
+    }
+    incrementColour++;
+    if(incrementColour == 6) {
+      Serial.println(choice);
+      incrementColour = 0;
+      menuState = returnMenuState[menuState * -1];
+    }
+    else {
+      Serial.println(choice);
+    }
+  }
+  else {
+    if(menuState == -2 || menuState == -3) {
+      int poz = -1 * menuState - 2;
+      if(choice < 1 || choice > 10);
+      else samplingIntervalArray[poz] = choice * 1000;
+      Serial.println(samplingIntervalArray[poz]);
+
+    }
+    else if(menuState == -4) {
+      alertThresholdArray[0] = choice;
+      Serial.println(choice);
+    }
+    else if(menuState == -5) {
+      if(choice < 0 || choice > 1023);
+      else alertThresholdArray[1] = choice;
+      Serial.println(alertThresholdArray[1]);
+    }
+    
+    menuState = returnMenuState[menuState * -1];
+  }
+  
+  DecideMenuDisplay();
+  prevMenuState = menuState;
+}
+
+void GetDistanceFromUltrasonic() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(emitLowDuration);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(emitHighDuration);
+  digitalWrite(trigPin, LOW);
+  durationUltrasonic = pulseIn(echoPin, HIGH);
+  distance = durationUltrasonic * 0.034 / 2;
+}
+
+void DecideMenuDisplay() { //// The switch used for the actual print of the menu/submenu
+  switch(menuState) {
+    case 0:
+      PrintMainMenu();
+      break;
+    case 1:
+      PrintSensorSettingsMenu();
+      break;
+    case 2:
+      PrintResetLoggerDataMenu();
+      break;
+    case 3:
+      PrintSystemStatusMenu();
+      break;
+    case 4:
+      PrintRGBLedControlMenu();
+      break;
+    case -7:
+     switch(incrementColour) {
+        case 0:
+         Serial.print("Normal value for Red : ");
+         break;
+        case 1:
+         Serial.print("Normal value for Green : ");
+         break;
+        case 2:
+         Serial.print("Normal value for Blue : ");
+         break;
+        case 3:
+         Serial.print("Alert value for Red : ");
+         break;
+        case 4:
+         Serial.print("Alert value for Green : ");
+         break;
+        case 5:
+         Serial.print("Alert value for Blue : ");
+         break;
+     }
+      break;
+    case -2:
+      Serial.print(samplingMessage);
+      Serial.print("ultrasonic : ");
+      break;
+    case -3:
+      Serial.print(samplingMessage);
+      Serial.print("LDR : ");
+      break;
+    case -4:
+      Serial.print("Enter min distance that triggers alert : ");
+      break;
+    case -5:
+      Serial.print("Enter min intensity (0-1023) that triggers alert : ");
+      break;
+    case -6:
+      break;
+    default:
+      PrintErrorMessage();
+  }
+}
+
+void PrintMainMenu() {
+  Serial.println("Main Menu Interface.");
+  Serial.println("Select an option : ");
+  Serial.println("1. Sensor Settings");
+  Serial.println("2. Reset Logger Data");
+  Serial.println("3. System Status");
+  Serial.println("4. RGB Led Control");
+  Serial.println("5. Put Logger Data In EEPROM");
+}
+
+void PrintSensorSettingsMenu() {
+  Serial.println("  Sensor Settings Menu.");
+  Serial.println("  Select an option : ");
+  Serial.println("  1. Sensor Sampling Interval");
+  Serial.println("  2. Ultrasonic Alert Threshold");
+  Serial.println("  3. LDR Alert Threshold");
+  Serial.println("  4. Back");
+  Serial.println("  ");
+}
+
+void PrintResetLoggerDataMenu() {
+  Serial.println("  Reset Logger Data");
+  Serial.println("  Are you sure you want to go to the default values?");
+  Serial.println("  1. YES");
+  Serial.println("  2. NO");
+  Serial.println("  ");
+}
+
+void PrintSystemStatusMenu() {
+  Serial.println("  System Status Menu.");
+  Serial.println("  Select an option : ");
+  Serial.println("  1. Current Sensor Readings - press 1 to exit");
+  Serial.println("  2. Current Sensors Settings");
+  Serial.println("  3. Display Logger Data");
+  Serial.println("  4. Back");
+  Serial.println("  ");
+}
+
+void PrintRGBLedControlMenu() {
+  Serial.println("  RGB Led Control Menu.");
+  Serial.println("  Select an option:");
+  Serial.println("  1. Manual Colour Control");
+  Serial.print("  2. Toggle Automatic ");
+  if(toggleCustom == LOW) Serial.println("OFF");
+  else Serial.println("ON");
+  Serial.println("  3. Back");
+}
+
+void PrintErrorMessage() {
+  Serial.println("Number not in range. Try again!");
+  Serial.println("  ");
+}
+
+void Reset() {
+  // Puts everything on 0 and updates EEPROM
+  for(int j = 0; j < 2; j++) {
+    for(int i = 0; i < numReadings; i++) {
+      loggerDataMatrix[j][i] = 0;
+    }
+  }
+  for(int i = 0; i < 2; i++) {
+    contorLoggerDataArray[i] = 0;
+  }
+  UpdateCycleEEPROM();
+}
+
+void PrintCurrentSettings() { 
+  Serial.println("\n------ Current Settings ------\n");
+  Serial.print("Using custom values for RGB : ");
+  if(toggleCustom == LOW) Serial.println("NO\n");
+  else Serial.println("YES\n");
+
+  Serial.println("Values used for RGB, for normal values");
+  Serial.print("Red : ");
+  if(toggleCustom == LOW) Serial.println(defaultNormalValuesRGB[0]);
+  else Serial.println(customNormalValuesRGB[0]);
+  Serial.print("Green : ");
+  if(toggleCustom == LOW) Serial.println(defaultNormalValuesRGB[1]);
+  else Serial.println(customNormalValuesRGB[1]);
+  Serial.print("Blue : ");
+  if(toggleCustom == LOW) Serial.println(defaultNormalValuesRGB[2]);
+  else Serial.println(customNormalValuesRGB[2]);
+
+  Serial.println("\nValues used for RGB, for exceeding values");
+  Serial.print("Red : ");
+  if(toggleCustom == LOW) Serial.println(defaultAlertValuesRGB[0]);
+  else Serial.println(customAlertValuesRGB[0]);
+  Serial.print("Green : ");
+  if(toggleCustom == LOW) Serial.println(defaultAlertValuesRGB[1]);
+  else Serial.println(customAlertValuesRGB[1]);
+  Serial.print("Blue : ");
+  if(toggleCustom == LOW) Serial.println(defaultAlertValuesRGB[2]);
+  else Serial.println(customAlertValuesRGB[2]);
+  
+  Serial.println("\nSampling data interval values");
+  Serial.print("For ultrasonic : ");
+  Serial.println(samplingIntervalArray[0]);
+  Serial.print("For LDR : ");
+  Serial.println(samplingIntervalArray[1]);
+
+  Serial.println("\nAlert thresholds");
+  Serial.print("For ultrasonic : ");
+  Serial.println(alertThresholdArray[0]);
+  Serial.print("For LDR : ");
+  Serial.println(alertThresholdArray[1]);
+}
+
+void PrintLoggerData() {
+  Serial.print("----- Last ");
+  Serial.print(numReadings); 
+  Serial.println(" Readings for Ultrasonic Sensor from oldest to newest -----");
+  for(int i = 0; i < numReadings; i++) {
+    Serial.print(loggerDataMatrix[0][(i + contorLoggerDataArray[0]) % numReadings]);
+    Serial.println(" cm");
+  }
+  Serial.print("----- Last ");
+  Serial.print(numReadings); 
+  Serial.println(" Readings for LDR Sensor from oldest to newest -----");
+  for(int i = 0; i < numReadings; i++) {
+    Serial.println(loggerDataMatrix[1][(i + contorLoggerDataArray[1]) % numReadings]);
+  }
+}
