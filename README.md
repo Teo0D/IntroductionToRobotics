@@ -88,4 +88,15 @@ Menu: <br>
     - Done on demand to not compromise life expectancy of the board<br><br>
 Photo : ![20231120_214919](https://github.com/Teo0o0/IntroductionToRobotics/assets/99832898/5c6e39df-cee5-41b7-85a2-d4ecaca76d7e)
 <br>
-Video : https://youtu.be/zD8k7ipKCPA?si=D1q9b2tz1LxEzfFI
+Video : https://youtu.be/zD8k7ipKCPA?si=D1q9b2tz1LxEzfFI <br>
+# Homework 7
+Description : Small game on 8x8 matrix - Shoot walls<br>
+Game rules and logic :<br>
+  - Setup : Random player starting position and wall placement<br>
+  - Player : Blinks slowly, moves depending on joystick input, can't go through walls or bullet<br>
+  - Bullet : one at a time on the map, blinks fast, destroys walls on contact, destroyed if it lands on player's position<br>
+  - Four Leds : to indicate the direction of the player - the direction that the bullet follows when shot<br><br>
+Photo : ![20231127_220453](https://github.com/Teo0o0/IntroductionToRobotics/assets/99832898/848423e9-cc64-4583-b75a-be91ed4c9448)
+<br>
+Video : https://youtu.be/ontv38z4HZ4?si=7ap1l3sIgo80eOBp
+
