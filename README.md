@@ -89,6 +89,7 @@ Menu: <br>
 Photo : ![20231120_214919](https://github.com/Teo0o0/IntroductionToRobotics/assets/99832898/5c6e39df-cee5-41b7-85a2-d4ecaca76d7e)
 <br>
 Video : https://youtu.be/zD8k7ipKCPA?si=D1q9b2tz1LxEzfFI <br>
+
 # Homework 7
 Description : Small game on 8x8 matrix - Shoot walls<br>
 Game rules and logic :<br>
