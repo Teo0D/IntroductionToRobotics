@@ -101,3 +101,19 @@ Photo : ![20231127_220453](https://github.com/Teo0o0/IntroductionToRobotics/asse
 <br>
 Video : https://youtu.be/ontv38z4HZ4?si=7ap1l3sIgo80eOBp
 
+# Homework 8
+Description : Implement Menu on LCD<br><br>
+Checkpoint #1 : LCD Base Functionalities<br>
+  - Intro Message + animation<br>
+  - Menu :<br>
+    - Start game<br>
+    - Settings - mandatory :<br>
+      - LCD brightness control in EEPROM<br>
+      - Matrix brightness control in EEPROM<br>
+    - About<br>
+  - End Message<br>
+  - During gameplay logic<br><br>
+
+Photo : ![20231212_111950](https://github.com/Teo0o0/IntroductionToRobotics/assets/99832898/2cad1a80-dc47-48cf-816c-ef009116d829)
+<br>
+Video : https://youtu.be/X9R6KxoAT14?si=7UkmwZ8ulPAXuoUE
