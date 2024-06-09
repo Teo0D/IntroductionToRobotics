@@ -2,7 +2,8 @@
 The repo to be used during the Introduction to Robotics course.
 # About the repo
 Elective course taken during my third year studying at the Faculty of Mathematics and Computer Science at the University of Bucharest.
-I will be uploading each homework including requirements, implementation details, code and image files.
+I will be uploading each homework including requirements, implementation details, code and image files. <br>
+Link to the matrix project: https://github.com/Teo0D/ShootAndRun-MatrixProject
 # Homework 2
 Description: Use a separate potentiometer for controlling each color of the RGB LED: Red,
 Green, and Blue. This control must leverage digital electronics. Specifically,
